@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#e8322b" stop-opacity="0.85"/>
+      <stop offset="50%" stop-color="#f59e0b" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.95"/>
+    </linearGradient>
+    <linearGradient id="lens" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e0f2fe" stop-opacity="0.88"/>
+      <stop offset="50%" stop-color="#7dd3fc" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#0284c7" stop-opacity="0.78"/>
+    </linearGradient>
+  </defs>
+  <!-- 10% safe margin: 26..230 -->
+  <rect x="26" y="26" width="204" height="204" rx="36" fill="url(#bg)" stroke="#334155" stroke-width="3"/>
+  <!-- Subtle technical drafting grid -->
+  <g stroke="#334155" stroke-width="1" opacity="0.45">
+    <line x1="26" y1="94" x2="230" y2="94"/>
+    <line x1="26" y1="128" x2="230" y2="128"/>
+    <line x1="26" y1="162" x2="230" y2="162"/>
+    <line x1="94" y1="26" x2="94" y2="230"/>
+    <line x1="128" y1="26" x2="128" y2="230"/>
+    <line x1="162" y1="26" x2="162" y2="230"/>
+  </g>
+  <!-- 3D Oblique Prism / Chip base -->
+  <polygon points="56,166 116,166 138,148 78,148" fill="#475569" stroke="#94a3b8" stroke-width="2" stroke-linejoin="round"/>
+  <polygon points="56,166 116,166 116,182 56,182" fill="#334155" stroke="#94a3b8" stroke-width="2" stroke-linejoin="round"/>
+  <polygon points="116,166 138,148 138,164 116,182" fill="#1e293b" stroke="#94a3b8" stroke-width="2" stroke-linejoin="round"/>
+  <!-- Optical / Schematic Beam -->
+  <polygon points="46,122 128,110 128,146 46,134" fill="url(#beam)"/>
+  <polygon points="128,110 208,92 208,164 128,146" fill="url(#beam)" opacity="0.78"/>
+  <!-- Illustrated Biconvex Lens Hero -->
+  <path d="M128,68 C146,96 146,160 128,188 C110,160 110,96 128,68 Z" fill="url(#lens)" stroke="#e0f2fe" stroke-width="3"/>
+  <!-- Patent / Schematic Callout Leader -->
+  <circle cx="134" cy="84" r="3.5" fill="#f8fafc"/>
+  <polyline points="134,84 156,62 194,62" fill="none" stroke="#f8fafc" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="166" y="55" font-family="serif" font-size="14" font-style="italic" fill="#f8fafc" font-weight="bold">102</text>
+</svg>

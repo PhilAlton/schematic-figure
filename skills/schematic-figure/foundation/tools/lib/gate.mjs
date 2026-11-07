@@ -1,29 +1,15 @@
-// check.mjs — the gate. Measures what can be measured; it cannot tell you the figure is good.
-//   node tools/check.mjs [--fig figure/figure.js] [--final] [--root <project dir>] [--out <dir>]
-// FAIL lines must be fixed. WARN lines are a fix-list unless you can say why the figure is right.
-// Writes <figure dir>/out/check.json and out/onscreen-text.txt (every string on the page, for the facts ledger).
-import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
-import { join, resolve, dirname, relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { tmpdir } from 'node:os';
-import { serve, launch, loadFigure, args } from './lib/cdp.mjs';
-import { patentGate } from './lib/patentgate.mjs';
+// gate.mjs — shared DOM + canvas pixel + 37 CFR 1.84 + 3D hero calibration gate.
+// Exported as runGate({ cdp, M, figAbs, out, final, A }) so both check.mjs and render.mjs (--check) can run it in a single Chromium session.
+import { writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { join, dirname, resolve } from 'node:path';
+import { patentGate } from './patentgate.mjs';
 
-const A = args();
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const PROJ = A.root && A.root !== true ? resolve(A.root) : null;   // --root <dir>: the figure lives outside the foundation (as in render.mjs)
-const figAbs = resolve(A.fig ?? 'figure/figure.js'), fig = relative(PROJ ?? ROOT, figAbs);
-// --out <dir>: where check.json and onscreen-text.txt go. Default: out/ next to the figure. With --root: the OS temp folder, so the project's source tree stays clean.
-const out = A.out && A.out !== true ? resolve(A.out) : PROJ ? join(tmpdir(), 'schem-check', figAbs.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_-]+/g, '_').slice(-80)) : join(dirname(figAbs), 'out');
-mkdirSync(out, { recursive: true });
 const WIDTHS = [89, 120, 136, 183];
-const HOLE = 0.18;   // largest empty square above this share of a panel: warn. In our benchmark, figures that judges rated sparse had a largest empty square of 0.08-0.22, the others 0.07-0.10 (8 figures)
+const HOLE = 0.18;   // largest empty square above this share of a panel: warn.
 const FORMATS = { journal: { min: 5, max: 8, line: 0.25, heavy: 2.5, ppi: 300 }, slide: { min: 14, max: 40, line: 0.8, heavy: 8, ppi: 150 }, poster: { min: 20, max: 120, line: 1.5, heavy: 12, ppi: 150 } };
-// Hero line: read from docs/spec.md ("Hero: ...") or from a comment line in the figure's own JS ("// Hero: ...").
-// Returns { has, none, routed, spec }: has = any Hero line, none = a "Hero: none" line,
-// routed = a Hero line that names a drawing route (vector 3D, lightScene3, Blender, illustrated finish).
 const ROUTE = /vector\s*3d|lightScene3|blender|illustrated\s*finish/i;
-function heroLine() {
+
+function heroLine(figAbs) {
   const spec = join(dirname(figAbs), '..', 'docs', 'spec.md');
   const srcs = [];
   if (existsSync(spec)) srcs.push([readFileSync(spec, 'utf8'), /^\W*hero\W*:(.*)$/im, /^\W*hero\W*:\W*none\b/im]);
@@ -31,18 +17,22 @@ function heroLine() {
   const routed = srcs.some(([t, h]) => { const m = h.exec(t); return !!m && ROUTE.test(m[1]); });
   return { has: srcs.some(([t, h]) => h.test(t)), none: srcs.some(([t, , n]) => n.test(t)), routed, spec: existsSync(spec) };
 }
-const res = { fail: [], warn: [], info: [] };
-const F_ = (m) => res.fail.push(m), W_ = (m) => res.warn.push(m), I_ = (m) => res.info.push(m);
 
-const { srv, port } = await serve(ROOT, PROJ);
-const cdp = await launch();
-try {
-  const t0 = Date.now();
-  const { manifest: M, error } = await loadFigure(cdp, port, fig, { dpi: 192 });
-  if (error) { F_('figure threw: ' + error.split('\n')[0]); throw 0; }
-  I_(`build ${Date.now() - t0} ms; ${M.widthMM} x ${M.heightMM} mm; ${M.texts.length} texts, ${M.strokes.length} strokes, ${M.images.length} images, ${M.panels.length} panels`);
+export async function runGate({ cdp, M, figAbs, out, final = false, A = {}, buildMs = null }) {
+  const res = { fail: [], warn: [], info: [] };
+  const F_ = (m) => res.fail.push(m), W_ = (m) => res.warn.push(m), I_ = (m) => res.info.push(m);
+
+  if (buildMs != null) {
+    I_(`build ${buildMs} ms; ${M.widthMM} x ${M.heightMM} mm; ${M.texts.length} texts, ${M.strokes.length} strokes, ${M.images.length} images, ${M.panels.length} panels`);
+  } else {
+    I_(`${M.widthMM} x ${M.heightMM} mm; ${M.texts.length} texts, ${M.strokes.length} strokes, ${M.images.length} images, ${M.panels.length} panels`);
+  }
+
   // patent drawing sheets (37 CFR 1.84) have their own rule set in place of the journal checks below
-  if (M.format === 'patent') { await patentGate({ cdp, M, figAbs, out, F_, W_, I_, A }); throw 0; }
+  if (M.format === 'patent') {
+    await patentGate({ cdp, M, figAbs, out, F_, W_, I_, A: { ...A, final } });
+    return finishGate(res, out);
+  }
 
   // page
   const FM = FORMATS[M.format] || FORMATS.journal;
@@ -53,9 +43,6 @@ try {
 
   // text
   const T = M.texts.filter((t) => t.s.trim());
-  // text scale (our survey of the published Fig. 1s of 28 benchmark papers, text read by OCR at the size the judges saw):
-  // the median label is about 2.2% of the figure width (25th percentile 1.65%). Figures from an early version of the
-  // skill had 1.1%, smaller than the published one on 27 of 28 papers
   if (M.format === 'journal' || !M.format) {
     const L = T.filter((t) => t.role !== 'panel').map((t) => t.size).sort((a, b) => a - b);
     if (L.length) {
@@ -68,14 +55,14 @@ try {
   const fam = [...new Set(T.map((t) => t.family))]; if (fam.length > 1) W_(`more than one font family: ${fam.join(' | ')}`);
   const tooSmall = T.filter((t) => t.role !== 'panel' && t.size < FM.min - 1e-6);
   if (tooSmall.length) F_(`text below ${FM.min} pt: ${tooSmall.slice(0, 8).map((t) => `${JSON.stringify(t.s.slice(0, 20))} ${t.size.toFixed(1)}pt`).join(', ')}`);
-  const REP = M.mode === 'replicate';   // replicate: the reference's own sizes win over the house caps
+  const REP = M.mode === 'replicate';
   if (REP) I_('replicate mode: text above 8 pt, coloured text and heavy lines are reported as info, not warnings');
   const soft = REP ? I_ : W_;
   { const L = T.filter((t) => t.role !== 'panel' && t.size > FM.max + 1e-6); if (L.length) soft(`text above ${FM.max} pt: ${L.slice(0, 8).map((t) => JSON.stringify(t.s.slice(0, 24))).join(', ')}`); }
   bad((t) => t.minSize < FM.min * 0.72, `sub/superscript below ${(FM.min * 0.72).toFixed(1)} pt`);
   // text budget: published schematics carry 0.20-0.45 words per cm2 (5 figures measured); designs drift to 1+
   const nWords = T.filter((t) => t.role !== 'panel').reduce((n, t) => n + (t.s.match(/[A-Za-z]{2,}|\d+(?:\.\d+)?/g) || []).length, 0);
-  const dens = nWords / (M.widthMM * M.heightMM / 100), budget = Math.round(0.5 * M.widthMM * M.heightMM / 100);
+  const dens = nWords / (M.widthMM * M.heightMM / 100);
   const msg = `text: ${nWords} words, ${dens.toFixed(2)} words/cm2 (calibration from 5 published schematics: 0.20-0.45)`;
   if (dens > 0.5 && !REP && M.format !== 'poster') W_(msg + ': smell test, check whether caption material is on the figure'); else I_(msg);
   const panels = T.filter((t) => t.role === 'panel');
@@ -84,13 +71,13 @@ try {
     const want = labs.map((_, i) => String.fromCharCode(97 + i));
     if (labs.join() !== want.join()) W_(`panel labels ${labs.join(',')} are not a, b, c, ... in drawing order`);
   }
-  // headings as sentences (P31): judges named sentence or question headings as a slide-deck tell in 5 of 28 benchmark figures
+  // headings as sentences (P31)
   {
     const heads = T.filter((t) => t.role === 'title' || (t.role === 'label' && /^(bold|[6-9]00)$/.test(String(t.weight))));
     const L = heads.filter((t) => /[?!]\s*$/.test(t.s) || /[a-z]\.\s*$/.test(t.s) || (t.s.match(/[A-Za-z]{2,}/g) || []).length >= 6);
     if (L.length && !REP) W_(`sentence-style headings (P31: name the content with a noun phrase): ${L.slice(0, 6).map((t) => JSON.stringify(t.s.slice(0, 40))).join(', ')}`);
   }
-  // caption-like labels: in the 12 lowest-scoring benchmark figures, judges named explanatory or chatty labels in 8 ('Recipe: ...', 'Aluminium block, cut open', 'no energy, no temperature')
+  // caption-like labels
   {
     const words = (t) => (t.s.match(/[A-Za-z]{2,}/g) || []).length;
     const L = T.filter((t) => t.role === 'label' && !/^(bold|[6-9]00)$/.test(String(t.weight)) && (words(t) >= 6 || /[A-Za-z]{3,}:\s/.test(t.s) || /[A-Za-z]{2,}, (no|not|cut|only|so|but)\b/i.test(t.s)));
@@ -101,7 +88,7 @@ try {
   const ov = [];
   for (let i = 0; i < T.length; i++) for (let j = i + 1; j < T.length; j++) {
     const a = T[i].box, b = T[j].box, e = (T[i].italic || T[j].italic) ? 0.9 : 0.4;
-    if (T[i].rotate || T[j].rotate) continue;   // axis-aligned boxes of rotated text over-report; checked by eye
+    if (T[i].rotate || T[j].rotate) continue;
     if (a.x + e < b.x + b.w - e && b.x + e < a.x + a.w - e && a.y + e < b.y + b.h - e && b.y + e < a.y + a.h - e) ov.push(`${JSON.stringify(T[i].s.slice(0, 18))} x ${JSON.stringify(T[j].s.slice(0, 18))}`);
   }
   if (ov.length) F_(`overlapping text (${ov.length}): ${ov.slice(0, 6).join('; ')}`);
@@ -114,11 +101,50 @@ try {
   const heavy = M.strokes.filter((s) => s.w > FM.heavy && !/beam|fiber|block|glow/.test(s.part));
   if (heavy.length) soft(`${heavy.length} strokes heavier than ${FM.heavy} pt outside beams/fibres`);
 
-  // raster images
+  // raster images + 2D <-> 3D Scene Calibration Check [Addresses FM-4]
+  const figDir = dirname(figAbs);
+  const projDir = dirname(figDir);
   for (const im of M.images) {
     if (!im.px[0]) { W_(`image without pixel size (pass pxw/pxh): ${im.href}`); continue; }
     const ppi = im.px[0] / (im.box.w / 72);
     if (ppi < FM.ppi) F_(`image ${im.href.slice(0, 40)} is ${ppi.toFixed(0)} ppi at placed size (needs ${FM.ppi})`);
+
+    // Resolve <im.href>.json relative to figure dir or project root
+    const cleanHref = im.href.replace(/^[./\\]+/, '');
+    const cands = [
+      resolve(figDir, `${im.href}.json`),
+      resolve(figDir, `${cleanHref}.json`),
+      resolve(projDir, `${im.href}.json`),
+      resolve(projDir, `${cleanHref}.json`),
+      resolve(projDir, 'figure', `${cleanHref}.json`),
+    ];
+    const metaPath = cands.find((p) => existsSync(p));
+    if (metaPath) {
+      try {
+        const meta = JSON.parse(readFileSync(metaPath, 'utf8'));
+        if (meta && meta.fig_width_mm) {
+          const placedMM = im.box.w / (72 / 25.4);
+          if (Math.abs(placedMM - meta.fig_width_mm) / meta.fig_width_mm > 0.12) {
+            W_(`image ${im.href} placed at ${placedMM.toFixed(1)} mm but rendered with fig_width_mm=${meta.fig_width_mm} mm: Freestyle outline weights will scale off-target; update fig_width_mm in render3d.py and re-render`);
+          }
+        }
+      } catch {}
+    }
+  }
+
+  // Optional figure/scene-contract.json verification
+  const contractCands = [join(figDir, 'scene-contract.json'), join(projDir, 'figure', 'scene-contract.json')];
+  const contractPath = contractCands.find((p) => existsSync(p));
+  if (contractPath) {
+    try {
+      const sc = JSON.parse(readFileSync(contractPath, 'utf8'));
+      if (sc && sc.fig_width_mm && M.images.length === 1) {
+        const placedMM = M.images[0].box.w / (72 / 25.4);
+        if (Math.abs(placedMM - sc.fig_width_mm) / sc.fig_width_mm > 0.12) {
+          W_(`image ${M.images[0].href} placed at ${placedMM.toFixed(1)} mm but scene-contract.json specifies fig_width_mm=${sc.fig_width_mm} mm`);
+        }
+      }
+    } catch {}
   }
 
   // relations: declared (F.relate) vs drawn (L.connect between anchors)
@@ -188,17 +214,16 @@ try {
   })()`);
   if (px.busy.length) W_(`text over busy art (use a halo, move it, or add a leader line): ${px.busy.slice(0, 8).map(([s, d]) => `${JSON.stringify(s)} ${d}`).join(', ')}`);
   I_(`ink coverage ${(px.ink * 100).toFixed(1)}% of the page (calibration: see reference/style.md)`);
-  // judges named "large empty areas" or "sparse panels" in most benchmark figures that they scored below 40
   I_(`largest empty square per panel (share of panel area): ${px.holes.map(([l, f]) => `${l} ${f}`).join(', ')}`);
   { const L = px.holes.filter(([, f]) => f > HOLE); if (L.length && !REP && M.format === 'journal') W_(`large empty area in panel ${L.map(([l, f, s]) => `${l} (${Math.round(f * 100)}% of the panel, ${(s / 72 * 25.4).toFixed(0)} mm square)`).join(', ')}: enlarge the main art, move a neighbour in, or shrink the panel`); }
 
-  // rendered hero: judges named flat code-drawn primitives as the main tell in about 20 of 28 benchmark figures; no raster art and no "Hero: none" reason in the spec
+  // rendered hero
   if (!REP && M.format === 'journal' && !M.images.length) {
-    { const hl = heroLine(); if (!hl.none && !hl.routed) W_('no rendered hero: render the hero object in Blender (blender/bio3d.py, device3d.py, apparatus3d.py), name the route in a "Hero:" line (vector 3D, lightScene3, Blender, illustrated finish), or write "Hero: none, <reason>" in docs/spec.md or as a "// Hero: none, <reason>" comment in the figure file'); }
+    const hl = heroLine(figAbs);
+    if (!hl.none && !hl.routed) W_('no rendered hero: render the hero object in Blender (blender/bio3d.py, device3d.py, apparatus3d.py), name the route in a "Hero:" line (vector 3D, lightScene3, Blender, illustrated finish), or write "Hero: none, <reason>" in docs/spec.md or as a "// Hero: none, <reason>" comment in the figure file');
   }
 
-  // drawing route of device figures (2026-10-08): an agent drew a device setup flat, with no light scene and no illustrated finish.
-  // The gate reads the part names the library writes (data-part) and the figure's style flag from the page.
+  // drawing route of device figures
   const st = await cdp.evaluate(`(() => {
     const parts = new Set([...document.querySelectorAll('#host svg [data-part]')].map((e) => e.getAttribute('data-part')));
     const own = [...document.querySelectorAll('#host svg text')].map((t) => { const g = t.closest('[data-panel]'); return g ? g.getAttribute('data-panel') : null; });
@@ -210,28 +235,24 @@ try {
     const hasScene = st.parts.some((p) => p === 'light-scene' || /^surface-/.test(p) || /through-glass$/.test(p) || /^lens-(face|rim)$/.test(p));
     if (has3d && hasBeam && !hasScene) W_('oblique 3D parts and beams, but no L.lightScene3 scene: beams drawn as flat polygons look the same in front of, through and beside glass (SKILL.md step 7, "Light meets 3D parts")');
     if (has3d && !st.illustrate) W_('3D parts without the illustrated finish: set illustrate: true in the figure export, or say in docs/spec.md why the figure stays flat (SKILL.md step 7)');
-    const hl = heroLine();
+    const hl = heroLine(figAbs);
     if (hl.spec && !hl.has) W_('docs/spec.md and the figure file have no "Hero:" line: write "Hero: <object>, rendered with <kit function>" or "Hero: none, <reason>", and report the drawing route to the user (SKILL.md step 3)');
   }
-  // label spill (2026-10-08): a text box that leaves its own panel and lands in another panel's area (task pages, FAIL-free gate missed it)
+  // label spill
   {
     const own = st.own, spill = [];
     M.texts.forEach((t, i) => {
       const lab = own[i]; if (lab == null || !t.s.trim() || t.rotate) return;
       const P = M.panels.find((q) => q.label === lab); if (!P) return;
       const b = t.box, tol = 0.5;
-      if (b.x >= P.x - tol && b.y >= P.y - tol && b.x + b.w <= P.x + P.w + tol && b.y + b.h <= P.y + P.h + tol) return;   // inside its panel
+      if (b.x >= P.x - tol && b.y >= P.y - tol && b.x + b.w <= P.x + P.w + tol && b.y + b.h <= P.y + P.h + tol) return;
       const into = M.panels.find((q) => q !== P && Math.min(b.x + b.w, q.x + q.w) - Math.max(b.x, q.x) > 1 && Math.min(b.y + b.h, q.y + q.h) - Math.max(b.y, q.y) > 1);
       if (into) spill.push(`${JSON.stringify(t.s.slice(0, 24))} (panel ${lab || '?'} into panel ${into.label || '?'})`);
     });
     if (spill.length) W_(`text crosses its panel's bounds into another panel (${spill.length}): ${spill.slice(0, 8).join(', ')}${spill.length > 8 ? ` (+${spill.length - 8})` : ''}. Shorten the label, move it, or widen its panel`);
   }
 
-  // leader lines across other things: a callout or leader that runs through the inside of a drawn shape, or through
-  // another label's box, other than the shape it points to and its own label. It warns and never fails.
-  // Shapes that contain an end of the leader (the target, what the label sits on) are left out, so is anything smaller
-  // than 1.2 pt, anything fainter than 30% opacity, and the first and last 1.5 pt of the line. A crossing must run
-  // at least 1.2 pt inside the shape.
+  // leader lines across other things
   {
     const leadRes = await cdp.evaluate(`(() => { try {
       const svg = document.querySelector('#host svg'), rootInv = svg.getScreenCTM().inverse();
@@ -293,22 +314,26 @@ try {
   }
 
   writeFileSync(join(out, 'onscreen-text.txt'), T.map((t) => `${t.role}\t${t.size.toFixed(1)}pt\t${t.s}`).join('\n') + '\n');
-  if (A.final) {
+  if (final || A.final) {
     const facts = join(dirname(figAbs), '..', 'docs', 'facts.md');
     if (!existsSync(facts)) W_('docs/facts.md missing: every label and number must be sourced');
     else {
-      const norm = (x) => x.replace(/[\s   ]+/g, '');
+      const norm = (x) => x.replace(/[\s\u2009\u200A\u00A0]+/g, '');
       const ledger = norm(readFileSync(facts, 'utf8'));
       const unsourced = T.filter((t) => t.role !== 'panel' && t.s.length > 1 && !ledger.includes(norm(t.s)));
       if (unsourced.length) W_(`on-screen strings not quoted in docs/facts.md: ${unsourced.slice(0, 12).map((t) => JSON.stringify(t.s)).join(', ')}`);
     }
   }
-} catch (e) { if (e !== 0) F_('check crashed: ' + (e.stack || e)); }
-finally { cdp.close(); srv.close(); }
 
-writeFileSync(join(out, 'check.json'), JSON.stringify(res, null, 1));
-for (const m of res.fail) console.log('FAIL ' + m);
-for (const m of res.warn) console.log('WARN ' + m);
-for (const m of res.info) console.log('info ' + m);
-console.log(res.fail.length ? `\nGATE: ${res.fail.length} fail, ${res.warn.length} warn` : `\nGATE: green (${res.warn.length} warn). Green does not mean good: look at the render.`);
-process.exitCode = res.fail.length ? 1 : 0;
+  return finishGate(res, out);
+}
+
+export function finishGate(res, out) {
+  writeFileSync(join(out, 'check.json'), JSON.stringify(res, null, 1));
+  for (const m of res.fail) console.log('FAIL ' + m);
+  for (const m of res.warn) console.log('WARN ' + m);
+  for (const m of res.info) console.log('info ' + m);
+  console.log(res.fail.length ? `\nGATE: ${res.fail.length} fail, ${res.warn.length} warn` : `\nGATE: green (${res.warn.length} warn). Green does not mean good: look at the render.`);
+  if (res.fail.length) process.exitCode = 1;
+  return res;
+}

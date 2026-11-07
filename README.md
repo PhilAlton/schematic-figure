@@ -1,12 +1,14 @@
-# schematic-figure
+# Schematic Studio (`schematic-studio` v2.0.0)
 
-A skill for AI agents that draws publication-quality schematic figures for scientific papers. It gives you vector graphics (SVG and PDF) and the code that draws them, so you can edit any part. The story behind it is in our blog post, [Automating schematic figure making](https://lgwrightlab.github.io/schematic-figure/).
+A first-class **Google Antigravity / Gemini Plugin** (and Claude/Codex skill suite) upgraded from [`lgwrightlab/schematic-figure`](https://github.com/lgwrightlab/schematic-figure) for designing, rendering, and auditing **publication-quality scientific schematic figures** (Nature-style SVG/PDF/PNG/PPTX with procedural vector illustration and headless Blender 3D hero elements) and **37 CFR 1.84 USPTO patent drawing sheets**.
+
+The story behind the original foundation engine is in the blog post, [Automating schematic figure making](https://lgwrightlab.github.io/schematic-figure/).
 
 ![A slideshow of five papers: the published figure, Opus 5.5 without the skill, and Opus 5.5 with the skill](docs/launch.gif)
 
 Each paper shows the published figure, Opus 5.5 without the skill, and Opus 5.5 with the skill. The first four papers were published after the model's training cutoff. The last is from our own lab, Wang et al. (2022). All five are CC BY.
 
-**⚠️ The skill does not replace the person who designs the figure.** It gives a fast first draft and many design ideas. You still check the science and fine-tune the details.
+**⚠️ The plugin does not replace the person who designs the figure.** It gives a fast first draft, parallel concept exploration, and deterministic + multimodal spatial checks. You still check the science and fine-tune the details.
 
 <details>
 <summary>Figure credits</summary>
@@ -21,48 +23,74 @@ Published figures are shown resized for display, under [CC BY 4.0](https://creat
 
 </details>
 
+## What's New in `schematic-studio` v2.0.0 (Gemini / Antigravity Upgrade)
+
+1. **Native Antigravity Plugin Manifest & Guardrails (`plugin.json`, `rules/AGENTS.md`, `assets/logo.svg`)**:
+   - Top-level `skills/schematic-figure` and `skills/patent-drawing` with a backward-compatible `.claude/skills -> ../skills` symlink so all `foundation/tools/*.mjs` relative paths work seamlessly across Gemini Antigravity, Claude Code, and Codex.
+2. **5 Specialized Subagents (`agents/*.md`) for True Clean-Room Verification**:
+   - `schematic-architect`: Upfront Steps 1–4 planner (`docs/brief.md`, `docs/facts.md`, `docs/spec.md`, `figure/scene-contract.json`).
+   - `schematic-3d-specialist`: Headless Blender 3D hero (`blender/*.py`) and RDKit molecular SVG (`tools/molecule.py`) builder.
+   - `schematic-drafter`: Isolated vector code author (`figure/figure_a.js`, `figure/figure_b.js`, `figure/figure.js`).
+   - `schematic-blind-reader`: Clean-room Step 10 cold reader that sees *only* `<name>-thumb.png` and `<name>.png` (strictly forbidden from reading `docs/brief.md`, `docs/spec.md`, or `figure/*.js`).
+   - `schematic-art-director`: Parallel draft adjudicator (`docs/choice.md`), Gemini 2D spatial auditor, and subtraction-first critic (`docs/critique-independent.md`).
+3. **Zero-npm Progressive-Disclosure & Spatial Grounding Tools**:
+   - `node skills/schematic-figure/foundation/tools/query-parts.mjs`: Zero-LLM API & part signature slicer (`< 4 KB` output) across all 11 core engine modules, 5 domain libraries (`bio`, `chem`, `cs`, `ind`, `qc`), and 5 Blender 3D kits.
+   - `node skills/schematic-figure/foundation/tools/render.mjs --fig <path> --quick --check`: Single-pass rendering and full DOM/canvas pixel gate in one headless Chromium session (with container-safe `--no-sandbox` / `--disable-dev-shm-usage` flags).
+   - `node skills/schematic-figure/foundation/tools/gemini-vision-check.mjs`: Zero-npm Gemini REST API spatial auditor that converts normalized `0..1000` bounding boxes into exact figure `pt` and `mm` coordinates (with clean `exit 0` fallback when `GEMINI_API_KEY` is unset).
+   - **2D $\leftrightarrow$ 3D Freestyle Outline Calibration**: `blender/scene.py` exports `fig_width_mm` into `<out_png>.json` and `check.mjs` warns if the placed width in `figure.js` drifts by `> 12%`.
+
 ## Install
 
-Copy both skill folders into your skills folder (`patent-drawing` draws patent drawing sheets and uses the engine of `schematic-figure`):
+### Google Antigravity / Gemini Plugin
+Clone the repository directly into your workspace or connect it as an Antigravity plugin (`plugin.json` at the repository root automatically registers `skills/`, `agents/`, and `rules/AGENTS.md`).
+
+### Claude Code / Codex
+Both `skills/` and `.claude/skills/` are provided out of the box:
 
 ```bash
-git clone https://github.com/lgwrightlab/schematic-figure.git
+git clone https://github.com/PhilAlton/schematic-figure.git
 mkdir -p ~/.claude/skills
-cp -r schematic-figure/.claude/skills/* ~/.claude/skills/
+cp -r schematic-figure/skills/* ~/.claude/skills/
 ```
 
-You can also ask your agent to install it. In Codex, name the path of `SKILL.md` in your prompt. The skill needs Node.js 22 or later and a Chromium browser. Blender and RDKit are optional, for 3D renders and molecules.
+Requirements: **Node.js `>= 22`** (uses built-in `WebSocket` and `fetch`; **zero `npm install`**) and a **Chromium** browser (`google-chrome`, `chromium`, or `msedge`). **Blender 4.x/5.x** and **RDKit** are optional for 3D renders and molecular structures.
+
+## Quick CLI Reference
+
+```bash
+# 1. Discover domain part signatures (< 4 KB progressive disclosure)
+node skills/schematic-figure/foundation/tools/query-parts.mjs --list-domains
+node skills/schematic-figure/foundation/tools/query-parts.mjs --domains optics,bio --route lightScene3
+
+# 2. Single-pass inner loop: render 300 dpi PNG + 360px thumb + run full DOM/pixel gate
+node skills/schematic-figure/foundation/tools/render.mjs --fig skills/schematic-figure/foundation/demo/figure.js --quick --check
+
+# 3. Standalone deterministic gate (journal or 37 CFR 1.84 patent sheets)
+node skills/schematic-figure/foundation/tools/check.mjs --fig skills/schematic-figure/foundation/demo/patent.js
+
+# 4. Gemini 2D spatial grounding check (optional; exits 0 when GEMINI_API_KEY is unset)
+node skills/schematic-figure/foundation/tools/gemini-vision-check.mjs --img skills/schematic-figure/foundation/demo/out/demo.png
+```
 
 ## Use
 
-Tips to use the skill in practice, from our own use:
+Tips to use the plugin in practice:
 
-- **Give it the full story.** A short request will work for well-known concepts. For a novel scientific concept, the skill needs a detailed technical description to work well. Example:
+- **Give it the full story.** A short request will work for well-known concepts. For a novel scientific concept, provide a detailed technical description:
 
-  > "Use the schematic-figure skill to design Fig. 1 for our paper [attach technical description]."
+  > "Use schematic-figure to design a two-column (183 mm) Nature-style Fig. 1 for our paper with three parallel concept drafts [attach technical description]."
 
-- **Show it a style to follow.** An example figure, from your earlier papers or one you admire, gives the skill a target for colours, line weights and level of detail. Example:
+- **Show it a style to follow.** An example figure from your earlier papers or one you admire gives a target for colours, line weights, and level of detail:
 
-  > "Use the schematic-figure skill. Follow the colours and line weights of the attached figure from our last paper [attach example figure]. Draw our new device in the same style [attach technical description]."
+  > "Replicate the attached schematic figure as clean editable vector code and verify it with the geometry and Gemini vision gates."
 
-- **Ask for several ideas at once.** We often run three agents in parallel on the same request. Each comes back with a different design, and we combine the best parts into one figure. Example:
+- **Generate 37 CFR 1.84 Patent Drawings:**
 
-  > "Use the schematic-figure skill. Make three different designs of this figure with three parallel agents for our paper [attach technical description] and combine them in a single sheet to show me."
-
-- **Steer it with a few words.** The skill picks a look and an effort level for you, and says what it picked. You can set them yourself:
-  - **Look:** say "flat" for a clean 2D diagram. Say "in 3D" for the skill's own vector 3D. Say "render it in Blender" for a rendered 3D object (this needs Blender installed). Say "photoreal" for a Blender render with photographic materials such as glass and metal.
-  - **Size:** say "Width 89 mm" for a one-column journal figure, or "Width 183 mm" for two columns.
-  - **Depth:** this is how much checking the agent does. "draft" is one quick pass with automatic checks, so you get a first look sooner and cheaper. "standard" adds a check of every count, direction and connection against your description, and a cold read of the result. The default, "full", also draws two versions, keeps the better one, and reviews it for errors.
-
-  Example:
-
-  > "Use the schematic-figure skill. Draw a lithium-ion cell while charging, in 3D. Width 89 mm, depth draft."
-
-- **Work in a project folder.** The agent works in the folder where you start it. It writes the figure to `figure/out/` as SVG, PDF and PNG, sometimes inside a subfolder named after the figure. To change the figure, ask the agent in the same folder. For TIFF, EPS or PowerPoint, ask the agent to export the figure. This step needs Python 3 with Pillow, python-pptx and lxml, and `pdftops` or Ghostscript for EPS.
+  > "Use patent-drawing to generate a 37 CFR 1.84 compliant FIG. 1 sheet and reference numeral ledger from our patent claims."
 
 ## Citation
 
-We wrote up how we built and tested the skill in a blog post. If you find the skill useful in your work, please cite the post:
+If you find this plugin useful in your work, please cite the original blog post:
 
 ```bibtex
 @article{zhao2026automating,
@@ -77,4 +105,4 @@ We wrote up how we built and tested the skill in a blog post. If you find the sk
 
 ## License
 
-MIT. The Latin Modern fonts in `.claude/skills/schematic-figure/foundation/fonts/` are under the GUST Font License, which ships beside them.
+MIT. The Latin Modern fonts in `skills/schematic-figure/foundation/fonts/` are under the GUST Font License, which ships beside them.

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "2D <-> 3D Scene Calibration Contract between schematic-architect, schematic-3d-specialist, and schematic-drafter",
+  "panel": "a",
+  "hero": "example_apparatus",
+  "kit": "apparatus3d",
+  "out_png": "figure/art/hero.png",
+  "style": "illustration",
+  "fig_width_mm": 60,
+  "outline_pt": 0.5,
+  "light_deg": [-135.0, 30.0],
+  "camera": {
+    "projection": "oblique",
+    "elev_deg": 25.0,
+    "azim_deg": 30.0,
+    "ortho_scale": 6.0
+  },
+  "palette": [
+    "#0072B2",
+    "#56B4E9",
+    "#009E73",
+    "#E69F00",
+    "#D55E00",
+    "#CC79A7"
+  ],
+  "required_anchors": [
+    "input_port",
+    "hero_center",
+    "output_port"
+  ]
+}

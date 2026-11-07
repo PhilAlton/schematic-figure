@@ -44,10 +44,23 @@ export function serve(root, projectRoot) {
 
 export async function launch() {
   const prof = mkdtempSync(join(tmpdir(), 'schem-cdp-'));
-  const proc = spawn(CHROME, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${prof}`, '--no-first-run',
-    '--disable-gpu', '--hide-scrollbars', '--font-render-hinting=none',
-    // Without this, Chrome on Windows waits ~30 s for proxy auto-detection before the first page load (2026-10-06).
-    '--no-proxy-server', 'about:blank']);
+  const chromeFlags = [
+    '--headless=new',
+    '--remote-debugging-port=0',
+    `--user-data-dir=${prof}`,
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--disable-gpu',
+    '--hide-scrollbars',
+    '--font-render-hinting=none',
+    '--no-proxy-server',
+    // Container / remote Linux safety flags [Addresses FM-2]:
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    'about:blank'
+  ];
+  const proc = spawn(CHROME, chromeFlags);
   const port = await new Promise((res, rej) => {
     const t = setTimeout(() => rej(new Error('chrome did not start')), 20000);
     proc.stderr.on('data', (b) => { const m = /ws:\/\/[^:]+:(\d+)\//.exec(String(b)); if (m) { clearTimeout(t); res(m[1]); } });
@@ -61,8 +74,19 @@ export async function launch() {
   const evaluate = async (expression) => { const r = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }); return r.result.value; };
   // Chrome's helper processes can keep the stderr pipe open after the browser is killed, which kept the tool
   // from exiting: destroy the pipe, kill, and force the exit shortly after the tool's own cleanup.
-  const close = () => { try { ws.close(); } catch {} try { proc.stderr.destroy(); } catch {} proc.kill();
-    setTimeout(() => { try { rmSync(prof, { recursive: true, force: true }); } catch {} process.exit(process.exitCode ?? 0); }, 800); };
+  const close = () => {
+    try { ws.close(); } catch {}
+    try { proc.stderr.destroy(); } catch {}
+    if (process.platform === 'win32' && proc.pid) {
+      try { spawn('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore' }); } catch {}
+    } else {
+      try { proc.kill('SIGKILL'); } catch {}
+    }
+    setTimeout(() => {
+      try { rmSync(prof, { recursive: true, force: true }); } catch {}
+      process.exit(process.exitCode ?? 0);
+    }, 400);
+  };
   await send('Page.enable'); await send('Runtime.enable');
   return { send, evaluate, close };
 }

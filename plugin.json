@@ -1,0 +1,16 @@
+{
+  "name": "schematic-studio",
+  "displayName": "Schematic Studio (Publication-Quality Vector Schematics, 3D Hero Renders & USPTO Patent Drawings)",
+  "version": "2.0.0",
+  "description": "Design, render, and audit publication-quality scientific schematic figures (Nature-style SVG/PDF/PNG/PPTX with procedural vector illustration and headless Blender 3D hero elements) and 37 CFR 1.84 USPTO patent drawing sheets using a multi-agent Gemini workflow and deterministic Chromium DOM/pixel gates.",
+  "logo": "assets/logo.svg",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lgwrightlab/schematic-figure"
+  },
+  "suggestedPrompts": [
+    "Use schematic-figure to design a two-column (183 mm) Nature-style Fig. 1 for our paper with three parallel concept drafts",
+    "Replicate the attached schematic figure as clean editable vector code and verify it with the geometry and Gemini vision gates",
+    "Use patent-drawing to generate a 37 CFR 1.84 compliant FIG. 1 sheet and reference numeral ledger from our patent claims"
+  ]
+}

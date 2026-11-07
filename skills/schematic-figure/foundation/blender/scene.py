@@ -696,7 +696,7 @@ def illustrate_scene(sc=None, outline_pt=0.5, fig_width_mm=None, bands=3, palett
                 sty.color = (0.1, 0.1, 0.12); sty.thickness = max(0.6, px * wgt); sty.thickness_position = 'CENTER'
                 sty.caps = 'ROUND'; sty.use_chaining = True; sty.chaining = 'PLAIN'; sty.use_same_object = True
                 cm = sty.color_modifiers.new('mat', 'MATERIAL'); cm.material_attribute = 'LINE'; cm.blend = 'MIX'; cm.influence = 1.0
-    info = dict(px=px, px_per_pt=px_per_pt, tint_objs=tint_objs, through=through if lines else 0.0, kinds=kinds,
+    info = dict(px=px, px_per_pt=px_per_pt, fig_width_mm=fig_width_mm, tint_objs=tint_objs, through=through if lines else 0.0, kinds=kinds,
                 catchers=[o.name for o in catchers], size=size, sun='IL_sun' if (shadow == 'contact' and catchers) else None,
                 shadow=shadow_opacity if (shadow == 'contact' and catchers) else 0.0,
                 shadow_rgb=tuple(v / 255 for v in (0x2a, 0x30, 0x3c)))
