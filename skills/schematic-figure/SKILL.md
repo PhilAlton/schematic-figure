@@ -1,6 +1,6 @@
 ---
 name: schematic-figure
-description: Draw a publication-quality scientific schematic, slide or poster figure (setup, concept, mechanism or overview figure, Nature style) as vector SVG/PDF/PNG from code, optionally with Blender-rendered 3D elements under vector labels. Use when asked to draw, redraw, replicate, revise or design a schematic or concept figure for a paper, talk or proposal, from a reference figure, a written description, or a research note. Options (all optional) - mode, style, route (flat, vector3d, blender), depth (draft, standard, full), review (independent, own), web (on, off).
+description: "Draw a publication-quality scientific schematic, slide or poster figure (setup, concept, mechanism or overview figure, Nature style) as vector SVG/PDF/PNG from code, optionally with Blender-rendered 3D elements under vector labels. Use when asked to draw, redraw, replicate, revise or design a schematic or concept figure for a paper, talk or proposal, from a reference figure, a written description, or a research note. Options (all optional) - mode, style, route (flat, vector3d, blender), depth (draft, standard, full), review (independent, own), web (on, off)."
 ---
 
 # Schematic figure (`schematic-studio` v2.0.0)

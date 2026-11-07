@@ -1,6 +1,6 @@
 ---
 name: patent-drawing
-description: Draw a patent drawing sheet (FIG. 1 and others) that can be filed under 37 CFR 1.84, from a patent description and claims plus a one-line description of the view: perspective, exploded, section, block diagram, flowchart or circuit, black line art with reference numerals and lead lines. Use when asked for a patent figure or drawing sheet.
+description: "Draw a patent drawing sheet (FIG. 1 and others) that can be filed under 37 CFR 1.84, from a patent description and claims plus a one-line description of the view: perspective, exploded, section, block diagram, flowchart or circuit, black line art with reference numerals and lead lines. Use when asked for a patent figure or drawing sheet."
 ---
 
 # Patent drawing (`schematic-studio` v2.0.0)
